@@ -1,82 +1,109 @@
-// background.js - Version 7 (Simplified Sequential)
+// background.js - Version 8 (Concurrent)
 
 // 1. RECEIVE URL
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "foundVideoUrl") {
-        console.log("SOURCE FOUND:", request.url);
-        attemptDownload(request.url);
+        // Pass the scraped title along
+        attemptDownload(request.url, request.pageTitle);
     }
 });
 
-async function attemptDownload(url) {
-    const data = await chrome.storage.local.get(['videoQueue', 'currentIndex', 'isJobRunning', 'activeDownloadId']);
-    
-    // Safety Checks
+async function attemptDownload(url, scrapedTitle) {
+    const data = await chrome.storage.local.get(['videoQueue', 'currentIndex', 'isJobRunning', 'activeDownloads', 'concurrencyLimit']);
+
     if (!data.isJobRunning) return;
-    
-    // CRITICAL FIX: If we already have an active download ID, IGNORE this request.
-    // This prevents double downloading if the content script sends the URL multiple times.
-    if (data.activeDownloadId) {
-        console.log("Ignored: A download is already in progress.");
-        return;
-    }
+
+    // Ensure activeDownloads is an array
+    const currentDownloads = data.activeDownloads || [];
+    const limit = data.concurrencyLimit || 1;
 
     const currentVideo = data.videoQueue[data.currentIndex];
-    
-    // Start Download
+
+    // --- FIX UNKNOWN TITLE ---
+    let finalFilename = currentVideo.filename;
+    if (finalFilename.includes("Unknown") && scrapedTitle) {
+        const prefix = finalFilename.split('-')[0]; // "M01_01 "
+        const cleanScraped = scrapedTitle.replace(/[\\/:*?"<>|]/g, "_").trim();
+        finalFilename = `${prefix}- ${cleanScraped}.mp4`;
+        console.log(`Fixed Unknown Title: ${finalFilename}`);
+    }
+
+    console.log(`Starting Download: ${finalFilename}`);
+
     chrome.downloads.download({
         url: url,
-        filename: `Coursera_Course/${currentVideo.filename}`,
+        filename: `Coursera_Course/${finalFilename}`,
         conflictAction: "overwrite"
     }, (downloadId) => {
         if (chrome.runtime.lastError) {
-             console.log("Download Failed:", chrome.runtime.lastError);
-             // If failed, force move to next to avoid stuck loop
-             processNext(); 
+            console.log("Download Error:", chrome.runtime.lastError);
+            // If error, force next to keep queue moving
+            checkAndNavigateNext();
         } else {
-             console.log(`Started ID: ${downloadId}. Locking...`);
-             chrome.storage.local.set({ activeDownloadId: downloadId });
+            // Add ID to active list
+            currentDownloads.push(downloadId);
+            chrome.storage.local.set({ activeDownloads: currentDownloads }, () => {
+                if (currentDownloads.length < limit) {
+                    navigateNext();
+                } else {
+                    console.log(`Max concurrency (${limit}) reached. Waiting for a finish...`);
+                }
+            });
         }
     });
 }
 
 // 2. WATCH FOR COMPLETION
 chrome.downloads.onChanged.addListener(async (delta) => {
-    // We only care if it finished
     if (!delta.state || delta.state.current !== 'complete') return;
 
-    const data = await chrome.storage.local.get(['activeDownloadId']);
-    
-    // Check if the finished ID matches our locked ID
-    if (data.activeDownloadId && delta.id === data.activeDownloadId) {
-        console.log("Download Finished. Unlocking...");
-        await chrome.storage.local.set({ activeDownloadId: null });
-        processNext();
+    const data = await chrome.storage.local.get(['activeDownloads']);
+    let currentDownloads = data.activeDownloads || [];
+
+    if (currentDownloads.includes(delta.id)) {
+        console.log(`Download ${delta.id} finished.`);
+
+        // Remove from list
+        currentDownloads = currentDownloads.filter(id => id !== delta.id);
+
+        await chrome.storage.local.set({ activeDownloads: currentDownloads });
+
+        // Slot opened up! Go next.
+        checkAndNavigateNext();
     }
 });
 
-async function processNext() {
-    const data = await chrome.storage.local.get(['videoQueue', 'currentIndex', 'isJobRunning']);
-    
+async function checkAndNavigateNext() {
+    const data = await chrome.storage.local.get(['isJobRunning', 'activeDownloads', 'concurrencyLimit']);
+
     if (!data.isJobRunning) return;
 
+    const limit = data.concurrencyLimit || 1;
+    const currentDownloads = data.activeDownloads || [];
+
+    if (currentDownloads.length < limit) {
+        navigateNext();
+    }
+}
+
+async function navigateNext() {
+    const data = await chrome.storage.local.get(['videoQueue', 'currentIndex']);
     const nextIndex = data.currentIndex + 1;
-    
+
     if (nextIndex >= data.videoQueue.length) {
-        console.log("JOB DONE.");
-        chrome.storage.local.set({ isJobRunning: false, activeDownloadId: null });
+        console.log("Reached end of queue. Waiting for pending downloads to finish.");
         return;
     }
 
-    // Save new index
-    await chrome.storage.local.set({ currentIndex: nextIndex, activeDownloadId: null });
+    // Update Index
+    await chrome.storage.local.set({ currentIndex: nextIndex });
 
     const nextUrl = data.videoQueue[nextIndex].url;
-    console.log(`Navigating to ${nextIndex}: ${nextUrl}`);
-    
-    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+    console.log(`Navigating to #${nextIndex + 1}: ${nextUrl}`);
+
+    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
         if (tabs[0]) {
-             chrome.tabs.update(tabs[0].id, { url: nextUrl });
+            chrome.tabs.update(tabs[0].id, { url: nextUrl });
         }
     });
 }

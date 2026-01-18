@@ -1,56 +1,58 @@
-// content.js - Version 6 (Infinite Persistence)
+// content.js - Version 8
 
 let searchInterval = null;
 
 function attemptAutoGrab() {
-    // Clear any existing interval just in case
     if (searchInterval) clearInterval(searchInterval);
 
-    console.log("Scanner started. Waiting for video...");
-
-    // Click Play if found (One time attempt)
+    // Try to click Play immediately
     const playBtn = document.querySelector('button[data-testid="centerPlayButton"]');
     if (playBtn) playBtn.click();
 
-    // Loop forever until we find the video source
     searchInterval = setInterval(() => {
-        // 1. Keep trying to click play if it appears late
+        // Retry clicking play
         const btn = document.querySelector('button[data-testid="centerPlayButton"]');
         if (btn) btn.click();
 
-        // 2. Check for Video Source
+        // Check for Video Source
         const videoElement = document.querySelector('video');
         if (videoElement && videoElement.src && videoElement.src.includes("cloudfront.net")) {
-            
-            console.log("FOUND SOURCE:", videoElement.src);
-            clearInterval(searchInterval); // Stop looking
 
-            // Send to background
+            console.log("FOUND SOURCE:", videoElement.src);
+            clearInterval(searchInterval);
+
+            // --- NEW: PAUSE VIDEO ---
+            videoElement.pause();
+
+            // --- NEW: GET PAGE TITLE (Fallback) ---
+            let pageTitle = "Unknown Video";
+            const h1 = document.querySelector('h1');
+            const h2 = document.querySelector('h2');
+            if (h1) pageTitle = h1.innerText;
+            else if (h2) pageTitle = h2.innerText;
+
+            // Send both URL and Title to background
             chrome.runtime.sendMessage({
                 action: "foundVideoUrl",
-                url: videoElement.src
+                url: videoElement.src,
+                pageTitle: pageTitle
             });
         }
-    }, 2000); // Check every 2 seconds
+    }, 2000);
 }
 
-// Start immediately
 attemptAutoGrab();
 
-// LISTENER FOR SCANNING (Unchanged)
+// SCANNER (Unchanged)
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "scanCourse") {
-        // ... (Keep your existing scan logic here, it was working fine) ...
-        // If you need me to paste the scan logic again, let me know, 
-        // but copy-pasting Part 2 from Version 4 is fine.
-        
-        // PASTE SCAN LOGIC HERE
         const courseData = [];
         const moduleHeaders = document.querySelectorAll('[data-testid="module-number-heading"]');
-        // ... (rest of scanner code)
+
         moduleHeaders.forEach((header) => {
-            const moduleName = header.innerText.trim(); 
+            const moduleName = header.innerText.trim();
             const moduleContainer = header.closest('.cds-AccordionRoot-container');
+
             if (moduleContainer) {
                 const items = moduleContainer.querySelectorAll('li');
                 let videoCount = 0;
@@ -62,10 +64,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                         const rawTitle = titleEl ? titleEl.innerText : "Unknown";
                         const linkEl = item.querySelector('a');
                         const href = linkEl ? linkEl.getAttribute('href') : "";
+
                         if (href) {
                             const modNum = moduleName.match(/\d+/)[0].padStart(2, '0');
                             const vidNum = videoCount.toString().padStart(2, '0');
                             const cleanTitle = rawTitle.replace(/[\\/:*?"<>|]/g, "_").trim();
+
                             courseData.push({
                                 url: "https://www.coursera.org" + href,
                                 filename: `M${modNum}_${vidNum} - ${cleanTitle}.mp4`
@@ -75,6 +79,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 });
             }
         });
+
         chrome.storage.local.set({ videoQueue: courseData, currentIndex: 0 }, () => {
             sendResponse({ count: courseData.length });
         });

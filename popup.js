@@ -1,36 +1,37 @@
 // popup.js
 
-// 1. INITIALIZE: Restore state from storage
 function init() {
-    chrome.storage.local.get(['videoQueue', 'currentIndex', 'isJobRunning'], (data) => {
+    chrome.storage.local.get(['videoQueue', 'currentIndex', 'isJobRunning', 'concurrencyLimit'], (data) => {
         const statusDiv = document.getElementById('status');
         const scanBtn = document.getElementById('scanBtn');
         const startBtn = document.getElementById('startBtn');
         const stopBtn = document.getElementById('stopBtn');
+        const concurrencyInput = document.getElementById('concurrencyInput');
 
-        // Check if we have a queue
+        // Restore saved limit or default to 1
+        if (data.concurrencyLimit) concurrencyInput.value = data.concurrencyLimit;
+
         if (data.videoQueue && data.videoQueue.length > 0) {
             const current = (data.currentIndex || 0) + 1;
             const total = data.videoQueue.length;
             
             if (data.isJobRunning) {
-                // RUNNING STATE
-                statusDiv.innerText = `RUNNING: Processing video ${current} of ${total}`;
+                statusDiv.innerText = `RUNNING: Video ${current} / ${total}`;
                 scanBtn.classList.add('hidden');
                 startBtn.classList.add('hidden');
                 stopBtn.classList.remove('hidden');
                 stopBtn.style.display = "block";
+                concurrencyInput.disabled = true; // Lock settings while running
             } else {
-                // PAUSED/READY STATE
-                statusDiv.innerText = `READY: ${total} videos found.\nNext up: Video #${current}`;
+                statusDiv.innerText = `READY: ${total} videos queued.\nNext: #${current}`;
                 scanBtn.innerText = "Rescan Course";
                 scanBtn.classList.remove('hidden');
                 startBtn.classList.remove('hidden');
                 stopBtn.classList.add('hidden');
+                concurrencyInput.disabled = false;
             }
         } else {
-            // EMPTY STATE
-            statusDiv.innerText = "No course data found. Please scan.";
+            statusDiv.innerText = "No queue. Please scan.";
             scanBtn.classList.remove('hidden');
             startBtn.classList.add('hidden');
             stopBtn.classList.add('hidden');
@@ -38,49 +39,39 @@ function init() {
     });
 }
 
-// Run on load
 init();
 
-// 2. BUTTON HANDLERS
-
-// SCAN
 document.getElementById('scanBtn').addEventListener('click', () => {
-    document.getElementById('status').innerText = "Scanning... (Expand all modules first!)";
+    document.getElementById('status').innerText = "Scanning... (Expand modules first!)";
     chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
         chrome.tabs.sendMessage(tabs[0].id, {action: "scanCourse"}, (response) => {
-            if (chrome.runtime.lastError || !response) {
-                document.getElementById('status').innerText = "Error: Refresh page & try again.";
-            } else {
-                // Reload UI to show new count
-                init();
-            }
+            init();
         });
     });
 });
 
-// START
 document.getElementById('startBtn').addEventListener('click', () => {
-    chrome.storage.local.set({ isJobRunning: true }, () => {
-        // Trigger the first move manually
+    const limit = parseInt(document.getElementById('concurrencyInput').value) || 1;
+    
+    // Save settings and Start
+    chrome.storage.local.set({ isJobRunning: true, concurrencyLimit: limit, activeDownloads: [] }, () => {
         chrome.storage.local.get(['videoQueue', 'currentIndex'], (data) => {
              if (data.videoQueue && data.videoQueue[data.currentIndex]) {
                  chrome.tabs.update({ url: data.videoQueue[data.currentIndex].url });
-                 window.close(); // Close popup so user sees the page load
+                 window.close();
              }
         });
         init();
     });
 });
 
-// STOP
 document.getElementById('stopBtn').addEventListener('click', () => {
     chrome.storage.local.set({ isJobRunning: false }, () => {
-        document.getElementById('status').innerText = "STOPPING... (Current download will finish)";
+        document.getElementById('status').innerText = "STOPPING...";
         init();
     });
 });
 
-// HARD RESET
 document.getElementById('resetBtn').addEventListener('click', () => {
     chrome.storage.local.clear(() => {
         document.getElementById('status').innerText = "Memory Cleared.";

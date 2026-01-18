@@ -4,7 +4,7 @@
 <head>
   <style>
     body {
-      width: 250px;
+      width: 260px;
       padding: 15px;
       font-family: sans-serif;
       background: #f8f9fa;
@@ -14,6 +14,7 @@
       margin-top: 0;
       text-align: center;
       color: #333;
+      margin-bottom: 10px;
     }
 
     .btn {
@@ -45,13 +46,13 @@
     #resetBtn {
       background: #f44336;
       color: white;
-      margin-top: 20px;
+      margin-top: 15px;
       font-size: 10px;
       padding: 5px;
     }
 
     #status {
-      font-size: 12px;
+      font-size: 11px;
       color: #333;
       margin-top: 15px;
       padding: 10px;
@@ -59,6 +60,21 @@
       border: 1px solid #ddd;
       border-radius: 4px;
       min-height: 40px;
+    }
+
+    .setting-box {
+      margin-bottom: 10px;
+      background: #eee;
+      padding: 8px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+
+    input[type=number] {
+      width: 40px;
+      padding: 3px;
+      border-radius: 3px;
+      border: 1px solid #ccc;
     }
 
     .hidden {
@@ -70,6 +86,11 @@
 <body>
   <h3>Coursera Video Downloader</h3>
 
+  <div class="setting-box">
+    <label>Concurrent Downloads:</label>
+    <input type="number" id="concurrencyInput" value="1" min="1" max="5">
+  </div>
+
   <div id="controls">
     <button id="scanBtn" class="btn">1. Scan Course</button>
     <button id="startBtn" class="btn hidden">2. Start Download</button>
@@ -78,7 +99,7 @@
 
   <div id="status">Checking status...</div>
 
-  <button id="resetBtn" class="btn">⚠️ HARD RESET (Clear All)</button>
+  <button id="resetBtn" class="btn">HARD RESET</button>
 
   <script src="popup.js"></script>
 </body>

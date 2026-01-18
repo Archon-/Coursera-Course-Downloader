@@ -13,7 +13,7 @@ Since this extension is not on the Chrome Web Store, you must install it in **De
 5.  Click **Load unpacked**.
 6.  Select the folder where you saved these files.
 
-**[For Detailed Instructions](https://techfixerlab.com)**
+**[For Detailed Instructions](https://www.techfixerlab.com/2026/01/coursera-course-downloader-2026.html)**
 
 ## Features
 

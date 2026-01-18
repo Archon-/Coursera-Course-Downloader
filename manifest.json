@@ -1,6 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Coursera Video Downloader",
+  "description": "Download Coursera course videos concurrently. Educational purpose only.",
   "version": "3.0",
   "permissions": [
     "downloads",

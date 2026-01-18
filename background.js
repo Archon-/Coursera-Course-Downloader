@@ -13,6 +13,14 @@ async function attemptDownload(url, scrapedTitle) {
 
     if (!data.isJobRunning) return;
 
+    // --- SECURITY CHECK: URL SCHEME ---
+    if (!url || (!url.startsWith("http:") && !url.startsWith("https:"))) {
+        console.error("Skipping unsafe or invalid URL:", url);
+        // Skip this download and move next
+        checkAndNavigateNext();
+        return;
+    }
+
     // Ensure activeDownloads is an array
     const currentDownloads = data.activeDownloads || [];
     const limit = data.concurrencyLimit || 1;
@@ -23,7 +31,9 @@ async function attemptDownload(url, scrapedTitle) {
     let finalFilename = currentVideo.filename;
     if (finalFilename.includes("Unknown") && scrapedTitle) {
         const prefix = finalFilename.split('-')[0]; // "M01_01 "
-        const cleanScraped = scrapedTitle.replace(/[\\/:*?"<>|]/g, "_").trim();
+        let cleanScraped = scrapedTitle.replace(/[\\/:*?"<>|]/g, "_").trim();
+        // Limit filename length (Windows max path is often 260, but individual components 255. play safe)
+        if (cleanScraped.length > 200) cleanScraped = cleanScraped.substring(0, 200);
         finalFilename = `${prefix}- ${cleanScraped}.mp4`;
         console.log(`Fixed Unknown Title: ${finalFilename}`);
     }

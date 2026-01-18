@@ -1,81 +1,82 @@
-// background.js - Version 4 (Message Receiver)
-let isProcessing = false;
+// background.js - Version 7 (Simplified Sequential)
 
-// LISTEN FOR MESSAGES FROM content.js
+// 1. RECEIVE URL
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    
     if (request.action === "foundVideoUrl") {
-        console.log("Received URL from Content Script:", request.url);
-        handleVideoDownload(request.url);
+        console.log("SOURCE FOUND:", request.url);
+        attemptDownload(request.url);
     }
 });
 
-async function handleVideoDownload(url) {
-    const data = await chrome.storage.local.get(['videoQueue', 'currentIndex', 'isJobRunning']);
-      
-    // 1. Safety Checks
-    if (!data.isJobRunning) {
-        console.log("Ignored: Job not running.");
-        return;
-    }
-    if (isProcessing) {
-        console.log("Ignored: Already processing a video.");
-        return;
-    }
-
-    // 2. Match current video
-    const currentVideo = data.videoQueue[data.currentIndex];
-    if (!currentVideo) {
-        console.log("Queue finished.");
-        chrome.storage.local.set({ isJobRunning: false });
-        return;
-    }
-
-    isProcessing = true; // LOCK
-
-    // 3. Download
-    console.log(`Downloading: ${currentVideo.filename}`);
+async function attemptDownload(url) {
+    const data = await chrome.storage.local.get(['videoQueue', 'currentIndex', 'isJobRunning', 'activeDownloadId']);
     
+    // Safety Checks
+    if (!data.isJobRunning) return;
+    
+    // CRITICAL FIX: If we already have an active download ID, IGNORE this request.
+    // This prevents double downloading if the content script sends the URL multiple times.
+    if (data.activeDownloadId) {
+        console.log("Ignored: A download is already in progress.");
+        return;
+    }
+
+    const currentVideo = data.videoQueue[data.currentIndex];
+    
+    // Start Download
     chrome.downloads.download({
         url: url,
         filename: `Coursera_Course/${currentVideo.filename}`,
         conflictAction: "overwrite"
     }, (downloadId) => {
-        // 4. Move to Next
-        processNext(data);
+        if (chrome.runtime.lastError) {
+             console.log("Download Failed:", chrome.runtime.lastError);
+             // If failed, force move to next to avoid stuck loop
+             processNext(); 
+        } else {
+             console.log(`Started ID: ${downloadId}. Locking...`);
+             chrome.storage.local.set({ activeDownloadId: downloadId });
+        }
     });
 }
 
-function processNext(data) {
+// 2. WATCH FOR COMPLETION
+chrome.downloads.onChanged.addListener(async (delta) => {
+    // We only care if it finished
+    if (!delta.state || delta.state.current !== 'complete') return;
+
+    const data = await chrome.storage.local.get(['activeDownloadId']);
+    
+    // Check if the finished ID matches our locked ID
+    if (data.activeDownloadId && delta.id === data.activeDownloadId) {
+        console.log("Download Finished. Unlocking...");
+        await chrome.storage.local.set({ activeDownloadId: null });
+        processNext();
+    }
+});
+
+async function processNext() {
+    const data = await chrome.storage.local.get(['videoQueue', 'currentIndex', 'isJobRunning']);
+    
+    if (!data.isJobRunning) return;
+
     const nextIndex = data.currentIndex + 1;
     
     if (nextIndex >= data.videoQueue.length) {
-        console.log("All done.");
-        chrome.storage.local.set({ isJobRunning: false });
-        isProcessing = false;
+        console.log("JOB DONE.");
+        chrome.storage.local.set({ isJobRunning: false, activeDownloadId: null });
         return;
     }
 
-    chrome.storage.local.set({ currentIndex: nextIndex }, () => {
-        console.log("Waiting 5s then navigating...");
-        
-        setTimeout(() => {
-            chrome.storage.local.get(['isJobRunning'], (latest) => {
-                if (!latest.isJobRunning) {
-                    isProcessing = false;
-                    return;
-                }
+    // Save new index
+    await chrome.storage.local.set({ currentIndex: nextIndex, activeDownloadId: null });
 
-                const nextUrl = data.videoQueue[nextIndex].url;
-                
-                chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-                    if(tabs[0]) {
-                         chrome.tabs.update(tabs[0].id, { url: nextUrl });
-                         // UNLOCK only after we are sure we navigated
-                         setTimeout(() => { isProcessing = false; }, 4000);
-                    }
-                });
-            });
-        }, 5000); 
+    const nextUrl = data.videoQueue[nextIndex].url;
+    console.log(`Navigating to ${nextIndex}: ${nextUrl}`);
+    
+    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+        if (tabs[0]) {
+             chrome.tabs.update(tabs[0].id, { url: nextUrl });
+        }
     });
 }

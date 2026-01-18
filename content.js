@@ -1,4 +1,4 @@
-// content.js - Version 27 (Debugger + Isolation Strategy)
+// content.js - Version 29 (Auto-Restore UI)
 
 let searchInterval = null;
 
@@ -81,89 +81,112 @@ function attemptAutoGrab() {
                 }, 100);
 
                 setTimeout(() => {
-                    console.log("Preparing Independent Isolation (For Debugger)...");
+                    console.log("Preparing Nuclear Isolation (With Auto-Restore)...");
 
                     let pageTitle = "Unknown Reading";
                     const h1 = document.querySelector('h1');
                     if (h1) pageTitle = h1.innerText;
 
-                    // --- ISOLATION STRATEGY FOR DEBUGGER ---
-                    // The live page has complex CSS (Grid/Flex) that causes overlaps when we force height.
-                    // We will COPY the content into a clean, simple BLOCK layout overlay.
-                    // The printer will see this clean overlay and paginate it perfectly.
+                    // STORE ORIGINAL STATE for restoration
+                    const originalBodyStyle = document.body.style.cssText;
+                    const originalHtmlStyle = document.documentElement.style.cssText;
+                    const hiddenElements = [];
 
-                    // 1. Create Clean Overlay
+                    // 1. Create Overlay
                     const overlay = document.createElement('div');
                     overlay.id = 'print-isolation-overlay';
                     overlay.style.cssText = `
-                        position: absolute; /* Absolute allows full scrolling */
+                        position: absolute;
                         top: 0;
                         left: 0;
                         width: 100%;
+                        min-height: 100vh;
                         background: white;
-                        z-index: 2147483647; /* Max Z-Index */
+                        z-index: 2147483647;
                         margin: 0;
-                        padding: 20px;
+                        padding: 40px; 
                         box-sizing: border-box;
                     `;
 
                     // 2. Clone Content
                     const clone = readingContainer.cloneNode(true);
-
-                    // 3. Reset Clone Styles to be Simple Block Flow
                     clone.style.cssText = `
-                        margin: 0 !important;
+                        margin: 0 auto !important;
                         padding: 0 !important;
                         width: 100% !important;
-                        max-width: 800px !important; /* Limit width for readability */
-                        margin-left: auto !important;
-                        margin-right: auto !important;
-                        position: static !important;
+                        max-width: 800px !important;
                         display: block !important;
-                        height: auto !important;
-                        overflow: visible !important;
+                        position: static !important;
                     `;
 
-                    // 4. Force Body to be simple container for overlay
-                    // We hide everything else by making the body a simple wrapper for our overlay
-                    // Note: We can't use display:none on body, but we can overlay on top.
-                    // Better: We temporarily hide the #appRoot
-                    const appRoot = document.getElementById('app');
-                    if (appRoot) appRoot.style.display = 'none';
+                    // 3. NUCLEAR STEP: Hide Sibling Elements
+                    const bodyChildren = Array.from(document.body.children);
+                    bodyChildren.forEach(child => {
+                        if (child.tagName !== 'SCRIPT' && child.style.display !== 'none') {
+                            hiddenElements.push({ element: child, originalDisplay: child.style.display });
+                            child.style.display = 'none';
+                        }
+                    });
+
+                    // 4. Nuke Fixed Elements
+                    const allFixed = document.querySelectorAll('*');
+                    allFixed.forEach(el => {
+                        const style = window.getComputedStyle(el);
+                        if (style.position === 'fixed' || style.position === 'sticky') {
+                            // We can't easily restore these individually without massive overhead,
+                            // but usually they come back when we reload or navigate.
+                            // For now, we only hide them via style injection or direct property if critical.
+                            // Actually, let's skip deep nuking to ensure easier restore, 
+                            // relies on the Overlay covering them (z-index max).
+                            // The Body Children hide should cover most app-level headers.
+                        }
+                    });
 
                     document.body.appendChild(overlay);
                     overlay.appendChild(clone);
 
-                    // 5. Force Height on Body now that it only contains our overlay
-                    document.body.style.height = 'auto';
-                    document.body.style.minHeight = '100vh';
-                    document.body.style.overflow = 'visible';
-                    document.documentElement.style.overflow = 'visible';
-                    document.documentElement.style.height = 'auto';
+                    // 5. Force Body Specs
+                    document.body.style.setProperty('height', 'auto', 'important');
+                    document.body.style.setProperty('min-height', '100vh', 'important');
+                    document.body.style.setProperty('overflow', 'visible', 'important');
+                    document.body.style.setProperty('background', 'white', 'important');
+                    document.documentElement.style.setProperty('height', 'auto', 'important');
+                    document.documentElement.style.setProperty('overflow', 'visible', 'important');
 
-                    // 6. Reveal Clone Internals
+                    // 6. Reveal Clone
                     const allInClone = clone.querySelectorAll('*');
                     allInClone.forEach(el => {
-                        // Ensure no internal fixed heights cause overlap
                         el.style.maxHeight = 'none';
-                        if (getComputedStyle(el).display === 'none') {
-                            el.style.display = 'block';
-                        }
+                        if (getComputedStyle(el).display === 'none') el.style.display = 'block';
                     });
 
                     clearInterval(forceShowInterval);
 
-                    // 7. Send Print Command
-                    // The Debugger will now print the "Body" which essentially only shows our clean Overlay.
+                    // 7. PRINT & RESTORE
                     setTimeout(() => {
                         chrome.runtime.sendMessage({
                             action: "printWithDebugger",
                             pageTitle: pageTitle
-                        });
+                        }, () => {
+                            // CALLBACK AFTER PRINT (Simple auto-restore)
+                            // Note: Message passing is async, but we can't confirm *when* print is done from here easily without complex roundtrip.
+                            // We will set a reasonable timeout to restore the UI.
 
-                        // Optional: Reload after print to restore UI?
-                        // For now, let's leave it. User can reload manually if needed or we can add a reload banner.
-                    }, 1000); // Small delay for rendering
+                            setTimeout(() => {
+                                console.log("Restoring UI...");
+                                if (document.body.contains(overlay)) document.body.removeChild(overlay);
+
+                                // Restore Body
+                                document.body.style.cssText = originalBodyStyle;
+                                document.documentElement.style.cssText = originalHtmlStyle;
+
+                                // Restore Hidden Elements
+                                hiddenElements.forEach(item => {
+                                    item.element.style.display = item.originalDisplay;
+                                });
+                            }, 5000); // 5 seconds to allow PDF generation to likely complete capture
+                        });
+                    }, 1000);
 
                 }, 3000);
 
@@ -203,6 +226,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                         const typeText = typeLabel.innerText;
                         let itemType = null;
 
+                        // Treat Reading as Reading if possible, or fallback
                         if (typeText.includes("Video")) itemType = 'video';
                         else if (typeText.includes("Reading")) itemType = 'reading';
 

@@ -1,14 +1,6 @@
-# Coursera Video Downloader
+# Coursera Course Downloader
 
-A Chrome Extension to download Coursera course videos in bulk/concurrently.
-
-## Features
-
-- **Automated Scanning**: Scans the current course page to identify video modules and names.
-- **Concurrent Downloads**: Supports downloading multiple videos at once (configurable from 1 to 5).
-- **Auto-Navigation**: Automatically moves to the next video page to grab the source URL if needed.
-- **Filename Cleaning**: Renames files to `ModuleName_VideoName.mp4` format using the actual lesson titles.
-- **Queue Management**: Pause, Stop, and Rescan capabilities.
+A powerful Chrome Extension to download Coursera course materials, including **Videos** and **Readings (PDF)**, with Parallel downloading support.
 
 ## Installation
 
@@ -21,30 +13,17 @@ Since this extension is not on the Chrome Web Store, you must install it in **De
 5.  Click **Load unpacked**.
 6.  Select the folder where you saved these files.
 
-## How to Use
+**[For Detailed Instructions](https://techfixerlab.com)**
 
-1.  **Login** to Coursera and go to the "Course Content" page (the main week-by-week view where all modules are listed).
-2.  **Open Extension**: Click the extension icon in your toolbar.
-3.  **Expand Modules**:
-    - **Important**: Manually click to expand the weeks/modules on the Coursera page so all video links are visible in the DOM.
-4.  **Click "Scan Course"** (Button 1):
-    - The extension will list how many videos it found.
-5.  **Select Concurrency**: Enter how many downloads you want at once (default is 1).
-6.  **Click "Start Download"** (Button 2):
-    - The extension will begin downloading files.
-    - **Note**: It may open tabs briefly to grab the secure video Source URL if it wasn't available on the main page. This is normal.
-7.  **Status**: The popup will show progress (e.g., "Video 5 / 50").
+## Features
 
-## Troubleshooting
+- **Automated Scanning**: Scans the current course page to identify video modules and readings materials.
+- **Parallel Downloads**: Supports downloading multiple videos at once (configurable from 1 to 5).
+- **Auto-Navigation**: Automatically moves to the next video page to grab the source URL if needed.
+- **Filename Cleaning**: Renames files to `ModuleName_VideoName.mp4` format using the actual lesson titles.
+- **Queue Management**: Pause, Stop, and Rescan capabilities.
 
-- **"Scanning..." stuck?**
-    - Make sure you are on the actual course home page (e.g., `coursera.org/learn/course-name/home/week/1`).
-    - Refresh the page and try again.
-- **Titles are "Unknown"?**
-    - The extension attempts to fix this by briefly visiting the video page to scrape the `<h1>` title.
-- **Downloads blocked?**
-    - Chrome may ask for permission to download multiple files. Click "Allow".
-
+---
 ## Disclaimer
 
 **Educational Purpose Only.**

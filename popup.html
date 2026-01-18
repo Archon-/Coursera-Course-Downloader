@@ -84,10 +84,14 @@
 </head>
 
 <body>
-  <h3>Coursera Video Downloader</h3>
+  <h3>Coursera Course Downloader</h3>
+  <div id="branding" style="font-size: 10px; color: #666; margin-bottom: 10px;">
+    by Bhashkar Gupta | <a href="https://techfixerlab.com" target="_blank"
+      style="color: #0056b3; text-decoration: none;">techfixerlab.com</a>
+  </div>
 
   <div class="setting-box">
-    <label>Concurrent Downloads:</label>
+    <label>Parallel Downloads:</label>
     <input type="number" id="concurrencyInput" value="1" min="1" max="5">
 
     <div style="margin-top: 10px; border-top: 1px solid #ccc; padding-top: 8px;">
@@ -104,7 +108,7 @@
 
   <div id="status">Checking status...</div>
 
-  <button id="resetBtn" class="btn">HARD RESET</button>
+  <button id="resetBtn" class="btn">CLEAR CACHED DATA</button>
 
   <script src="popup.js"></script>
 </body>

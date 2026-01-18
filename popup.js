@@ -105,9 +105,15 @@ document.getElementById('startBtn').addEventListener('click', () => {
 });
 
 document.getElementById('stopBtn').addEventListener('click', () => {
-    chrome.storage.local.set({ isJobRunning: false }, () => {
-        document.getElementById('status').innerText = "STOPPING...";
+    chrome.storage.local.set({
+        isJobRunning: false,
+        isNavigating: false,
+        videoQueue: [],   // Clear Queue
+        currentIndex: 0   // Reset Index
+    }, () => {
+        document.getElementById('status').innerText = "STOPPED (Queue Cleared).";
         init();
+        alert("Stopped and Queue Cleared.");
     });
 });
 

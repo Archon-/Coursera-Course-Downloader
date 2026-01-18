@@ -21,6 +21,7 @@
         "*://*.coursera.org/*"
       ],
       "js": [
+        "html2pdf.bundle.min.js",
         "content.js"
       ]
     }

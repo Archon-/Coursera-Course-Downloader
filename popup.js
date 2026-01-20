@@ -68,7 +68,16 @@ document.getElementById('scanBtn').addEventListener('click', () => {
 
         const url = tab.url || "";
         const isHttp = url.startsWith("http://") || url.startsWith("https://");
-        const isCoursera = url.includes("coursera.org/");
+        let isCoursera = false;
+        if (isHttp) {
+            try {
+                const parsedUrl = new URL(url);
+                const host = (parsedUrl.hostname || "").toLowerCase();
+                isCoursera = host === "coursera.org" || host.endsWith(".coursera.org");
+            } catch (e) {
+                isCoursera = false;
+            }
+        }
 
         if (!isHttp) {
             statusEl.innerText = "This page can't be scanned. Please open a Coursera course page (https://www.coursera.org/...) and try again.";
